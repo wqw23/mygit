@@ -1,102 +1,4 @@
-
-/******************************************************************************
-**文 件 名: Wifi_Door_Lock_purifier.c
-**作     者: wqw
-**生成日期: 2018年11月11日
-**功能描述: wifi门锁业务处理
-******************************************************************************/
-//Standard head file
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-//RTK8710 head file
-#include "FreeRTOS.h"
-#include "cmsis_os.h"
-#include "queue.h"
-#include "task.h"
-#include "semphr.h"
-#include "timers.h"
-#include "time.h"
-#include "timer_api.h"
-#include "lwip/def.h"
-//IOT SDK head
-#include "iotdevice.h"
-#include "log.h"
-#include "iotsdk_wifi.h"
-#include "iotsdk.h"
-#include "log.h"
-#include "datatype.h"
-#include "security_func.h"
-//Adapter head file
-#include "protocol.h"
-#include "product_config.h"
-#include "wifi_door_lock_uart_driver.h"
-#include "wifi_door_lock.h"
-#include "message_queue.h"
-#include "hal_dev.h"
-#include "report_task.h"
-
-
-#define MAX_NAME_LENGTH         32      /*设备名称和节点名称的最大长度*/
-#define MAX_PRODUCT_LENGTH      64      /*产品keyID最大长度*/
-#define ID_COUNT                16      /*attribute ID个数*/
-
-/*从MCU得到的帧类型*/
-#define MCU_ACK_PACKAGE                    (0x00)
-#define MCU_MODULE_START_INFO              (0x01)//启动模组是否启动cmd=01
-#define MCU_TIME_SERVICE_INFO              (0x02)//该数据包用于 MCU 向 WiFi 模组请求授时
-#define MCU_REPORT_DOOR_LOCK_INFO          (0x04)//该数据包用于 MCU 上报门锁状态
-#define MCU_RESET_COMMAND_INFO             (0x07)//该数据包用于 MCU 告诉 WiFi模组当前进行复位需要进入待配置状态
-#define MCU_DOOR_LOCK_DEPLOY_WITHDRAW_INFO (0x0a)//该数据包是 WiFi 模组和 MCU 之间通信， 设置/通知 布防/撤防-Deploy/withdraw
-#ifndef Wifi_Door_Lock_Open_Ignore_Event
-#define MCU_REVERSE_TIME_INFO              (0x03)
-#define MCU_DOOR_LOCK_REPORT_SETTING_INFO  (0x09)
-#endif
-
-/*从WIFI模块发送到MCU的数据包类型*/
-#define DEVICE_ACK_PACKAGE                          (0x80)
-#define DEVICE_READY_PACKAGE                        (0x81)
-#define DEVICE_TIME_SERVICE_PACKAGE                 (0x82)
-#define DEVICE_TURN_OFF_POWER_PACKAGE               (0x85)//该数据包用于 WiFi 模组告诉 MCU 可以断电了
-#define DEVICE_OTA_APPLICATION_PACKAGE              (0x86)//该数据包用于WiFi模组告诉MCU当前准备进行OTA操作请180秒后才做强制断电
-#define DEVICE_WIFI_STATUS_REPORT_PACKAGE           (0x88)//该数据包用于 WiFi 模组将自己的状态给到MCU,MCU可以控制喇叭播放出来
-#ifndef Wifi_Door_Lock_Open_Ignore_Event
-#define DEVICE_REVERSE_TIME_PACKAGE                 (0x83)//该数据包用于 WiFi 模组向 MCU 请求授时,收到指令83,然后mcu发送数据包
-#define DEVICE_GET_DOOR_LOCK_SETTING_INFO_PACKAGE   (0x89)//该数据包是 WiFi 模组发送命令要求 MCU 上报门锁当前设置
-#define DEVICE_APPLICATION_DEPLOY_WITHDRAW_PACKAGE  (0x8b)//WiFi 模组申请布防/撤防数据包
-#define DEVICE_APPLICATION_ADD_PASSWORD_PACKAGE     (0x8c)//WiFi 模组申请添加密码
-#define DEVICE_APPLICATION_DEL_PASSWORD_FINGERPRINT_IC_PACKAGE   (0x8d)//WiFi 模组申请删除密码/指纹/IC 卡
-#define DEVICE_APPLICATION_TIME_START_WIFI_PACKAGE  (0x8e)//WiFi 模组申请定时启动 WiFi 模组
-#endif
-
-/*事件类型*/
-#define TYPE_EVENT_MODULE_START                 (0x01)
-#define TYPE_EVENT_REQ_TIME                     (0x02)
-#define TYPE_EVENT_GET_TIME                     (0x03)
-#define TYPE_EVENT_REPORT_LOCK_STATUS           (0x04)
-#define TYPE_EVENT_RESET                        (0x07)
-#define TYPE_EVENT_REPORT_SETTING_INFO          (0x09)
-#define TYPE_EVENT_DEPLOY_WITHDRAW_INFO         (0x0a)
-
-/*联网状态*/
-#define NETWORK_CONFIGURE_DEVICE_STAR_SUCCESS           (0x00)//开始配置网络 WiFi模组已经进入到待配置网络状态
-#define NETWORK_CONFIGURE_SEND_SSID_PWD_SUCCESS         (0x01)//客户端已经将 SSID 和 PWD 发给了WiFi模组
-#define NETWORK_CONFIGURE_CONNECT_ROUTER_SUCCESS        (0x02)//配置网络中,WiFi 模组连接路由器成功
-#define NETWORK_CONFIGURE_SSID_ERROR                    (0x03)//配置网络中,WiFi 模组连接路由器失败，失败的原因是无法找到指定的 SSID
-#define NETWORK_CONFIGURE_PWD_ERROR                     (0x04)//配置网络中,WiFi 模组连接路由器失败，失败的原因是无法给出的路由密码错误
-#define NETWORK_NORMAL_CLOUD_SUCCESS                    (0x05)//配置网络中,连接云端成功，整个配置结束
-#define NETWORK_NORMAL_CONNECT_ROUTER_ERROR             (0x06)//正常使用中,连接路由器失败
-#define NETWORK_NORMAL_CONNECT_CLOUD_ERROR              (0x07)//正常使用中,连接云端失败
-#define NETWORK_NORMAL_CLOUD_AUTHORIZATION_ERROR        (0x08)//正常使用中,设备从云端授权失败
-
-
-/*属性信息*/
-typedef struct{
-    UINT32 id;
-    UINT16 value;
-}COM_DEV_INT_ATTR_STRUCT;
-
-/*属性信息*/
+*属性信息*/
 typedef struct{
     UINT32 id;
     UINT8* value;
@@ -119,21 +21,7 @@ typedef struct{
     UINT8 CloudType;
     UINT8 GadgetName[MAX_NAME_LENGTH + 1];
     UINT8 NodeName[MAX_NAME_LENGTH + 1];
-    UINT8 ProductId[MAX_PRODUCT_LENGTH + 1];
-    UINT8 ProductKey[MAX_PRODUCT_LENGTH + 1];
-}MCU_DEVICE_INFO_STRUCT;
-
-typedef struct{
-    UINT8 attribute_id;
-    union{
-        UINT16 param;
-        UINT8 d[2];
-    }data;
-}MCU_ATTRIBUTE_STRUCT;
-
-#pragma pack()
-
-static UINT8 s_Network_Status = NETWORK_CONFIGURE_DEVICE_STAR_SUCCESS;  /*记录网络状态*/
+tatic UINT8 s_Network_Status = NETWORK_CONFIGURE_DEVICE_STAR_SUCCESS;  /*记录网络状态*/
 
 static MCU_DEVICE_INFO_STRUCT s_MCU_Device_Info = {0};  /*存储设备信息*/
 
