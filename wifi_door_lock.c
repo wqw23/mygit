@@ -1,4 +1,4 @@
-  
+
 /******************************************************************************
 **文 件 名: Wifi_Door_Lock_purifier.c
 **作     者: wqw
@@ -16,7 +16,7 @@
 #include "task.h"
 #include "semphr.h"
 #include "timers.h"
-//#include "time.h"
+#include "time.h"
 #include "timer_api.h"
 #include "lwip/def.h"
 //IOT SDK head
